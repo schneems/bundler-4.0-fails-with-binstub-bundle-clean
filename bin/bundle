@@ -2,5 +2,8 @@
 ENV['BUNDLE_GEMFILE'] ||= File.expand_path('../Gemfile', __dir__)
 
 path = Gem.bin_path('bundler', 'bundle')
+
+puts "env: #{`env`}"
+puts "pwd: #{`pwd`}"
 puts "Gem.bin_path('bundler', 'bundle'): #{path}"
 load path
