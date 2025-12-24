@@ -1,65 +1,32 @@
 # Dockerfile to reproduce the Heroku bundler version issue
-#
-# CURRENT BEHAVIOR (broken): Bundler downloaded from S3 - gem files exist but gemspec missing
-# NEW BEHAVIOR (PR #1680): Bundler installed via `gem install` - gemspec included
-#
-# This simulates the CURRENT behavior where bundler is pre-built/downloaded
-# and the gemspec is NOT included in vendor/bundle/specifications/
+# WITH binstub: bundler 2.6.9 (Gem.bin_path fails without gemspec)
 
 FROM ruby:3.4
-
 WORKDIR /app
 
-# Copy application files
-COPY Gemfile Gemfile.lock ./
-COPY bin ./bin/
-
-# Create the vendor/bundle structure
-RUN mkdir -p vendor/bundle/ruby/3.4.0/gems \
-    && mkdir -p vendor/bundle/ruby/3.4.0/specifications \
-    && mkdir -p vendor/bundle/ruby/3.4.0/bin \
-    && mkdir -p vendor/bundle/bin
-
-# Simulate CURRENT buildpack behavior: download bundler from S3
-# The S3 download includes gem files but NOT the gemspec
-# We simulate this by installing bundler then removing the gemspec
-RUN GEM_HOME=/app/vendor/bundle/ruby/3.4.0 \
-    GEM_PATH=/app/vendor/bundle/ruby/3.4.0 \
-    gem install bundler -v 4.0.3 --no-document \
-    && rm /app/vendor/bundle/ruby/3.4.0/specifications/bundler-4.0.3.gemspec
-
-# Remove BUNDLED WITH from Gemfile.lock (like Heroku buildpack does)
-RUN sed -i '/BUNDLED WITH/,/^$/d' Gemfile.lock || true
-
-# Add the current platform to the lockfile
-RUN GEM_HOME=/app/vendor/bundle/ruby/3.4.0 \
-    GEM_PATH=/app/vendor/bundle/ruby/3.4.0 \
-    bundle lock --add-platform aarch64-linux x86_64-linux
-
-# Run bundle install
-RUN GEM_HOME=/app/vendor/bundle/ruby/3.4.0 \
+# Build-time environment
+ENV GEM_HOME=/app/vendor/bundle/ruby/3.4.0 \
     GEM_PATH=/app/vendor/bundle/ruby/3.4.0 \
     BUNDLE_PATH=vendor/bundle \
     BUNDLE_BIN=vendor/bundle/bin \
     BUNDLE_DEPLOYMENT=1 \
-    BUNDLE_WITHOUT=development:test \
-    bundle install
+    BUNDLE_WITHOUT=development:test
 
-# Debug: Show what's in specifications
-RUN echo "=== State after bundle install ===" \
-    && echo "Gemspecs in vendor/bundle:" \
-    && ls -la /app/vendor/bundle/ruby/3.4.0/specifications/ || echo "No specifications" \
-    && echo "" \
-    && echo "Bundler gem directory:" \
-    && ls -la /app/vendor/bundle/ruby/3.4.0/gems/ | grep bundler || echo "No bundler"
+COPY Gemfile Gemfile.lock ./
+COPY bin ./bin/
 
-# Set runtime environment variables (like Heroku - NO GEM_HOME)
-ENV BUNDLE_PATH=vendor/bundle \
-    BUNDLE_BIN=vendor/bundle/bin \
-    BUNDLE_DEPLOYMENT=1 \
-    BUNDLE_WITHOUT=development:test \
+RUN mkdir -p vendor/bundle/ruby/3.4.0/{gems,specifications,bin} vendor/bundle/bin
+
+# Install bundler then remove gemspec (simulates S3 download without gemspec)
+RUN gem install bundler -v 4.0.3 --no-document \
+    && rm $GEM_HOME/specifications/bundler-4.0.3.gemspec
+
+RUN bundle lock --add-platform aarch64-linux x86_64-linux
+RUN bundle install
+
+# Runtime environment (NO GEM_HOME - like Heroku)
+ENV GEM_HOME="" \
     GEM_PATH=/app/vendor/bundle/ruby/3.4.0: \
-    GEM_HOME="" \
     PATH=/app/bin:/app/vendor/bundle/bin:/app/vendor/bundle/ruby/3.4.0/bin:/usr/local/bin:/usr/bin:/bin
 
 CMD ["bundle", "-v"]
