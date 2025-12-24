@@ -1,6 +1,11 @@
 #!/usr/bin/env ruby
 ENV['BUNDLE_GEMFILE'] ||= File.expand_path('../Gemfile', __dir__)
-# puts "env: #{`env`}"
-# puts "pwd: #{`pwd`}"
-# puts "Gem.bin_path('bundler', 'bundle'): #{Gem.bin_path('bundler', 'bundle')}"
+
+# Debug output to see which bundler is being loaded
+if ENV['DEBUG_BINSTUB']
+  STDERR.puts "[binstub] GEM_HOME: #{ENV['GEM_HOME'] || '(not set)'}"
+  STDERR.puts "[binstub] GEM_PATH: #{ENV['GEM_PATH']}"
+  STDERR.puts "[binstub] Gem.bin_path('bundler', 'bundle'): #{Gem.bin_path('bundler', 'bundle')}"
+end
+
 load Gem.bin_path('bundler', 'bundle')
